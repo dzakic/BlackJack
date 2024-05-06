@@ -6,7 +6,7 @@ class Card:
     card: int
     hidden: bool = False
 
-    def __init__(self, card: int) -> None:
+    def __init__(self, card: int):
         self.card = card
 
     def getSuit(self) -> int:
@@ -17,19 +17,28 @@ class Card:
 
     def __str__(self):
         if self.hidden:
-            return "**"
+            return "??"
         else:
             return Card.Ranks[self.getRank()] + Card.Suits[self.getSuit()]
     
 class CardList:
     cards: List[Card]
 
+    def __init__(self):
+        self.cards = []
+
     def __getitem__(self, index) -> Card:
         return self.cards[index]
     
     def __str__(self) -> str:
         #str = ""
-        #for index in range(0, len(self.cards)):
+        #for index in range(len(self.cards)):
         #    str = str + f"{self[index]} "
         #return str
-        return " ".join(map(lambda index: str(self[index]), range(0, len(self.cards))))
+        return " ".join(map(lambda index: str(self[index]), range(len(self.cards))))
+
+    def add(self, card: Card):
+        self.cards.append(card)
+
+    def public(self):
+        return not any(map(lambda index: self[index].hidden, range(len(self.cards))))

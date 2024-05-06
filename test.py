@@ -1,8 +1,9 @@
 from bjack import BlackJack
+from board import BlackJackWindow
 
 # Test
 game = BlackJack(numPacks = 3)
-game.addPlayer("Zak", 100)
-game.addPlayer("Danilo", 200)
-
-game.play()
+game.addPlayer("Zak", 1000)
+game.addPlayer("Danilo", 2000)
+board = BlackJackWindow(game)
+board.play()

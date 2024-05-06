@@ -1,52 +1,55 @@
-from typing import List
-from cards import Card
-from cards import CardList
+from cards import Card, CardList
 from player import Player
+from enum import Enum
 
 class Hand(CardList):
-    betAmount: int
+
+    class Status(Enum):
+        LOSE = -1
+        PLAYING = 0
+        EVEN = 1
+        WIN = 2
+
     player: Player
+    betAmount: int
+    result: Status
 
     def __init__(self, player: Player):
-        self.cards = []
+        CardList.__init__(self)
         self.player = player
         self.betAmount = 0
+        self.result = Hand.Status.PLAYING
 
-    def getValue(card: Card) -> int:
+    def getCardValue(card: Card) -> int:
         value = card.getRank() + 1
         return value if value < 10 else 10
 
-    def getValues(self):
-        # return a list of integers of all possible interpretations 
-        # for A being 1 or 11
-        count = 1
-        result = [0]
+    def getValue(self) -> int:
+        handValue = 0
+        numAces = 0
         for card in self.cards:
-            cardValue = Hand.getValue(card)
-            for i in range(0, len(result)):
-                result[i] += cardValue
-            if cardValue == 1:
-                ace_result = []
-                for res in result:
-                    ace_result.append(res + 10)
-                result += ace_result;
-        return result
-    
-    def getBestValue(self) -> int:
-        # of all possible values, get the one closest but not over 21
-        values = self.getValues()
-        best = 0
-        for value in values:
-            if value <= 21:
-                if value > best:
-                    best = value
-        return best
-    
+            value = Hand.getCardValue(card)
+            if value == 1:
+                numAces += 1
+                handValue += 10
+            handValue += value        
+        while handValue > 21 and numAces > 0:
+            handValue -= 10
+            numAces -= 1
+        
+        return handValue if handValue <= 21 else 0
+
     def isBlackJack(self) -> bool:
-        return self.getBestValue() == 21
+        return self.getValue() == 21
+
+    def isNatural(self) -> bool:
+        return len(self.cards) == 2 and self.isBlackJack()
 
     def isBust(self) -> bool:
-        return self.getBestValue() == 0
+        return self.getValue() == 0
+    
+    def isSplittable(self) -> bool:
+        return len(self.cards) == 2 and self.cards[0].getRank() == self.cards[1].getRank()
 
     def bet(self, amount: int) -> bool:
         canBet = self.player.money >= amount
@@ -61,9 +64,6 @@ class Hand(CardList):
     def clear(self):
         self.betAmount = 0
 
-    def add(self, card: Card):
-        self.cards.append(card)
-
     def unhide(self):
         for card in self.cards:
             card.hidden = False
@@ -74,5 +74,5 @@ class Hand(CardList):
                 name = self.player.name,
                 money = self.player.money,
                 hand = str(self),
-                value = self.getBestValue(),
+                value = self.getValue(),
                 bet = self.betAmount))
