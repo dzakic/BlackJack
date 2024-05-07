@@ -16,6 +16,7 @@ class BlackJack:
         self.dealer = Player('## Dealer')
         self.players = []
         self.deck = Deck(numPacks)
+        self.initRound() 
         
     def addPlayer(self, name: str, money: float):
         player = Player(name, money)
@@ -25,6 +26,7 @@ class BlackJack:
         ## init round
         self.dealerHand = Hand(self.dealer)
         self.hands = []
+        self.current_hands = 0   
 
     def placeBets(self):        
         for player in self.players:
@@ -41,43 +43,36 @@ class BlackJack:
     def split(self, hand:Hand):
         card = hand.cards.pop()
         newHand = Hand(hand.player)
+        newHand.bet(hand.betAmount)
         newHand.add(card);
-        self.hands.append(newHand)
+        self.hands.insert(self.current_hands + 1, newHand)
         self.draw(hand)
         self.draw(newHand)
 
     def playerHand(self) -> Hand:
-        # TODO: Cycle through all hands
-        current_hands = 0   
-        return self.hands[current_hands]    
+        return self.hands[self.current_hands] \
+            if self.current_hands < len(self.hands) else None
 
-    # Fold hands, bet lost
-    def lose(self, hand: Hand):
-        # Dealer takes the bet
-        self.dealerHand.player.money += hand.betAmount;
-        hand.result = Hand.Status.LOSE
-        hand.clear()
+    def settle(self, hand: Hand):
+        match hand.result:
+            case Hand.Status.LOSE:
+                # Dealer takes the bet
+                self.dealerHand.player.money += hand.betAmount;
 
-    # Hands won the bet
-    def win(self, hand: Hand):
-        # natural win is half the bet
-        if len(hand.cards) == 2 and hand.isBlackJack():
-            winamount = hand.betAmount // 2
-        else:
-            winamount = hand.betAmount
-        # Dealer pays the winamount
-        self.dealerHand.player.money -= winamount;
-        # Player pockets original bet, plus dealer's payment
-        hand.player.money += hand.betAmount + winamount
-        hand.result = Hand.Status.WIN
-        hand.clear()
+            case Hand.Status.WIN:
+                # natural win is half the bet
+                if hand.isNatural():
+                    winamount = hand.betAmount // 2
+                else:
+                    winamount = hand.betAmount
+                # Dealer pays the winamount
+                self.dealerHand.player.money -= winamount;
+                # Player pockets original bet, plus dealer's payment
+                hand.player.money += hand.betAmount + winamount
 
-    # Equal to dealer, noone wins
-    def even(self, hand: Hand):
-        # Return money to player
-        hand.player.money += hand.betAmount;
-        hand.result = Hand.Status.EVEN
-        hand.clear()
+            case Hand.Status.EVEN:
+                # Return money to player
+                hand.player.money += hand.betAmount;
 
     # Deal one card to each hand and the dealer
     def deal1(self, dealerHidden: bool):
@@ -89,6 +84,12 @@ class BlackJack:
         # Deal 2 cards
         self.deal1(False)
         self.deal1(True)
+        if self.dealerHand.isBlackJack():
+            self.dealerHand.unhide()
+            # all non black jack hands lose            
+            for hand in self.hands:
+                if not hand.isBlackJack():
+                    hand.result = Hand.Status.LOSE
 
     def drawUntil(self, hand: Hand, until: int):
         while True:
@@ -108,103 +109,21 @@ class BlackJack:
             hand.unhide()
             player = hand.getValue()
             if player > dealer:
-                self.win(hand)
+                hand.result = Hand.Status.WIN                
             elif player == dealer:
-                self.even(hand)
+                hand.result = Hand.Status.EVEN
             else:
-                self.lose(hand)
+                hand.result = Hand.Status.LOSE
 
-    def activeHands(self) -> int:
-        count = 0
-        for hand in self.hands:
-            if hand.betAmount:
-                count += 1
-        return count
-    
-    # ------------------------------------------#
-    # -- --- Only needed for CONSOLE PLAY --- --#
-
-    def basicStrategy(upcard) -> int:
-        if upcard >= 7:
-            return 17
-        if upcard <= 3:
-            return 13
-        else:   
-            return 12
-
-    def playPlayer(self, hand: Hand):
-        if len(hand.cards) == 2 and hand.cards[0].getRank() == hand.cards[1].getRank():
-            # OPTION to split [Y/N]
-            index = self.hands.index(hand);
-            splitHand = Hand(hand.player)
-            splitHand.add(hand.cards.pop())
-            splitHand.bet(hand.betAmount)
-            self.hands.insert(index + 1, splitHand)
-
-        player = hand.getValue()
-        if len(hand.cards) == 2 and player >=9 and player <= 11:
-            # OPTION to double down, if player has money
-            if hand.doubleDown():
-                self.draw(hand, True)
-                return    
-        upcard = Hand.getValue(self.dealerHand[0]);
-        playTo = BlackJack.basicStrategy(upcard);
-        self.drawUntil(hand, playTo)
-
-    def showStats(self):
-        print("===")
-        self.dealerHand.dump()
-        for hand in self.hands:
-            hand.dump()
-       
-    def showPlayers(self, count: int):
-        print("====== Game #", count, "  Deck: ", len(self.deck.cards))
-        print(self.dealer)
-        for player in self.players:
-            print(player)
-
-    def playRound(self) -> bool:
-        
-        self.placeBets()
-
-        if not self.hands:
-            return False
-
-        self.deal()       
-        self.showStats()
-
-        if self.dealerHand.isBlackJack():
-            self.dealerHand.unhide()
-            # all non black jack hands lose
-            
-            for hand in self.hands:
-                if not hand.isBlackJack():
-                    self.lose(hand)
-                    self.showStats()
-
-        for hand in self.hands:
-            if hand.isBlackJack():
-                self.win(hand)
-                self.showStats()
-
-        for hand in self.hands:
-            if hand.betAmount:
-                self.playPlayer(hand);
-
-        if self.activeHands() > 0:
-            self.playDealer();
-            self.showStats()
-
-        # settle hands
-        self.finalise()
-        self.showStats()
-        return True
-        
-    def play(self):
-        count = 0       
+    # find next active hands and set active, else return false
+    def nextHand(self, active = False) -> bool:
         while True:
-            count += 1
-            if self.playRound():
-                self.showStats(count)
+            self.current_hands += 1
+            if self.current_hands >= len(self.hands):
+                return False
+            if active:
+                if self.playerHand().isPlaying():
+                    return True
+                # else continue
             else:
-                return
+                return True

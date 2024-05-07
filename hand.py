@@ -51,6 +51,9 @@ class Hand(CardList):
     def isSplittable(self) -> bool:
         return len(self.cards) == 2 and self.cards[0].getRank() == self.cards[1].getRank()
 
+    def isPlaying(self) -> bool:
+        return self.result == Hand.Status.PLAYING
+
     def bet(self, amount: int) -> bool:
         canBet = self.player.money >= amount
         if canBet:
@@ -60,9 +63,6 @@ class Hand(CardList):
 
     def doubleDown(self) -> bool:
         return self.bet(self.betAmount)
-
-    def clear(self):
-        self.betAmount = 0
 
     def unhide(self):
         for card in self.cards:

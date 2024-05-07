@@ -7,9 +7,9 @@ FONT = "Segoe UI"
 HAND_FONT_SIZE = 20
 BGCOL = "light sea green" # SkyBlue3
 class Stage(Enum):
+    VIEWING = 0
     PLACING_BETS = 1
     PLAYING = 2
-    SETTLED = 3
 
 class BlackJackWindow(Tk):
 
@@ -58,7 +58,9 @@ class BlackJackWindow(Tk):
         self.playerBet = Label(playerStatus, font = (FONT, 16), background=BGCOL)
         self.playerBet.pack(side = LEFT)
         self.playerValue = Label(playerStatus, width = 4, background=BGCOL, font = (FONT, 12), foreground="white")
-        self.playerValue.pack(side = RIGHT)
+        self.playerValue.pack(side = RIGHT)       
+        self.currentPlayer = Label(playerStatus, font = (FONT, 16), background=BGCOL)
+        self.currentPlayer.pack()
 
         self.playerName = Label(left, font = (FONT, 14))
         self.playerName.pack(side = BOTTOM, fill = X, padx = 5)
@@ -69,9 +71,9 @@ class BlackJackWindow(Tk):
         self.banner.pack(side = BOTTOM, fill = X, pady = 40)
 
         # Buttons
-        self.btnContinue = Button(right, text = "Stand", command = self.done, default = "active", font = (FONT, 12))
+        self.btnContinue = Button(right, text = "Stand", command = self.advance, default = "active", font = (FONT, 12))
         self.btnContinue.pack(side = BOTTOM, fill = X, padx = 5, pady = 5)
-        self.bind("<Return>", self.done)
+        self.bind("<Return>", self.advance)
 
         self.btnHit = Button(right, text = "Hit", command = self.hit, font = (FONT, 12))
         self.btnHit.pack(side = BOTTOM, fill = X, padx = 5, pady = 2)
@@ -88,9 +90,10 @@ class BlackJackWindow(Tk):
     def updateBoard(self):
         self.dealerHand.config(text = self.game.dealerHand)
         self.playerHand.config(text = self.game.playerHand())
-        self.playerBet.config(text = f"${self.game.playerHand().betAmount}")
-        self.playerName.config(text = f"${self.game.playerHand().player.name}")
+        self.playerName.config(text = self.game.playerHand().player.name)
+        self.currentPlayer.config(text = self.game.playerHand().player.name)
         self.playerMoney.config(text = f"${self.game.playerHand().player.money}")
+        self.playerBet.config(text = f"${self.game.playerHand().betAmount}")
 
         if self.stage == Stage.PLACING_BETS:
             self.banner["text"] = "Place bets"
@@ -114,7 +117,7 @@ class BlackJackWindow(Tk):
             self.banner["text"] = ""
             self.btnContinue["text"] = "Stand"
     
-        if self.stage == Stage.SETTLED:
+        if self.stage == Stage.VIEWING:
             self.playerValue.config(text = self.game.playerHand().getValue())
             self.dealerValue.config(text = self.game.dealerHand.getValue() if self.game.dealerHand.public() else "")
             self.btnSplit.pack_forget()
@@ -139,52 +142,62 @@ class BlackJackWindow(Tk):
 
     def hit(self, event = None):
         playerHand = self.game.playerHand()
-        if self.stage == Stage.PLACING_BETS:
-            playerHand.bet(BlackJack.DEFAULT_BET)
-        if self.stage == Stage.PLAYING:
-            self.game.draw(playerHand)
-            if playerHand.isBlackJack() or playerHand.isBust():
-                self.done()
+        match self.stage:
+            case Stage.PLACING_BETS:
+                playerHand.bet(BlackJack.DEFAULT_BET)
+            case Stage.PLAYING:
+                self.game.draw(playerHand)
+                #if playerHand.isBlackJack() or playerHand.isBust():
+                #    self.advance()
         self.updateBoard()
 
     def double(self, event = None):
         playerHand = self.game.playerHand()
         playerHand.bet(playerHand.betAmount)
         self.game.draw(playerHand)
-        self.done()
+        self.advance()
 
     def split(self, event = None):
         self.game.split(self.game.playerHand())
-        self.done()
+        self.updateBoard()
 
     # go to next stage
-    def done(self, event = None):      
+    def advance(self, event = None):      
         match self.stage:
-            case Stage.SETTLED:
-                self.stage = Stage.PLACING_BETS
-                # 1a. Init Bets
-                self.game.initRound()
-                self.game.placeBets()
             case Stage.PLACING_BETS:
-                self.stage = Stage.PLAYING
-                # 2a. Deal Cards
-                self.game.deal()
-                if self.game.dealerHand.isBlackJack():
-                    self.game.dealerHand.unhide()
-                    # all non black jack hands lose            
-                    for hand in self.game.hands:
-                        if not hand.isBlackJack():
-                            self.game.lose(hand)
+                if not self.game.nextHand(False):
+                    self.game.current_hands = 0
+                    # 2a. Deal Cards
+                    self.game.deal()                
+                    self.stage = Stage.PLAYING
+                    if not self.game.playerHand().isPlaying():
+                        self.advance()
             case Stage.PLAYING:
-                # 3a. Dealer plays
-                if self.game.activeHands() > 0:
+                # if no more hands, dealer plays and settles/reveals all hands            
+                if not self.game.nextHand(True):
+                    # 3a. Dealer plays
                     self.game.playDealer();
-                # 3b Settle hands
-                self.game.finalise()
-                self.stage = Stage.SETTLED
+                    # 3b Settle hands
+                    self.game.finalise()
+                    self.game.current_hands = 0
+                    self.stage = Stage.VIEWING
+            case Stage.VIEWING:
+                # finished viewing
+                if self.game.playerHand():
+                    self.game.settle(self.game.playerHand())
+                if self.game.nextHand(False):
+                    if self.game.playerHand():
+                        if self.game.playerHand().isPlaying():
+                            self.stage = Stage.PLAYING
+                else:
+                    self.stage = Stage.PLACING_BETS
+                    # 1a. Init Bets
+                    self.game.initRound()
+                    self.game.placeBets()
+
         self.updateBoard()
 
     def play(self):
-        self.stage = Stage.SETTLED
-        self.done()
+        self.stage = Stage.VIEWING
+        self.advance()
         self.mainloop()
