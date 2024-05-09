@@ -19,6 +19,7 @@ class BlackJackWindow(Tk):
     def __init__(self, game: BlackJack):
         Tk.__init__(self)
         self.game = game
+        self.playerFrames = []
 
         # Layout    
         self.title("Black Jack")
@@ -33,7 +34,18 @@ class BlackJackWindow(Tk):
         left = Frame(self, background = "SkyBlue3", width = 150)
         left.pack(side = LEFT, fill = Y, padx = 5, pady = 5)        
         left.pack_propagate(False) 
-        
+
+        for player in self.game.players:
+            frame = Frame(left, height = 75, background = "SkyBlue2", borderwidth = 10)
+            frame.pack(side = BOTTOM, fill = X, pady = 2, padx = 2)
+            frame.pack_propagate(False) 
+            frame.player = player
+            frame.playerMoney = Label(frame, font = (FONT, 12), background = "SkyBlue3")
+            frame.playerMoney.pack(side = BOTTOM, fill = X, padx = 5)
+            frame.playerName = Label(frame, font = (FONT, 14), background = "SkyBlue2")
+            frame.playerName.pack(side = BOTTOM, fill = X, padx = 5)
+            self.playerFrames.append(frame)
+
         right = Frame(self, background = "SkyBlue3", width = 150)
         right.pack(side = RIGHT, fill = Y, padx = 5, pady = 5)
         right.pack_propagate(False) 
@@ -53,19 +65,14 @@ class BlackJackWindow(Tk):
         self.playerHand = Label(middle, height = 2, font = (FONT, HAND_FONT_SIZE), background="forest green")
         self.playerHand.pack(side = BOTTOM, fill = X)
 
-        playerStatus = Frame(middle, background = BGCOL)
-        playerStatus.pack(side = BOTTOM, fill = X)        
-        self.playerBet = Label(playerStatus, font = (FONT, 16), background=BGCOL)
-        self.playerBet.pack(side = LEFT)
-        self.playerValue = Label(playerStatus, width = 4, background=BGCOL, font = (FONT, 12), foreground="white")
-        self.playerValue.pack(side = RIGHT)       
-        self.currentPlayer = Label(playerStatus, font = (FONT, 16), background=BGCOL)
+        playStatus = Frame(middle, background = BGCOL)
+        playStatus.pack(side = BOTTOM, fill = X)        
+        self.handBet = Label(playStatus, font = (FONT, 16), background=BGCOL)
+        self.handBet.pack(side = LEFT)
+        self.handValue = Label(playStatus, width = 4, background=BGCOL, font = (FONT, 12), foreground="white")
+        self.handValue.pack(side = RIGHT)       
+        self.currentPlayer = Label(playStatus, font = (FONT, 16), background=BGCOL)
         self.currentPlayer.pack()
-
-        self.playerName = Label(left, font = (FONT, 14))
-        self.playerName.pack(side = BOTTOM, fill = X, padx = 5)
-        self.playerMoney = Label(left, font = (FONT, 12))
-        self.playerMoney.pack(side = BOTTOM, fill = X, padx = 5)
 
         self.banner = Label(middle, font = (FONT, 28), background=BGCOL, foreground="greenyellow")
         self.banner.pack(side = BOTTOM, fill = X, pady = 40)
@@ -90,23 +97,28 @@ class BlackJackWindow(Tk):
     def updateBoard(self):
         self.dealerHand.config(text = self.game.dealerHand)
         self.playerHand.config(text = self.game.playerHand())
-        self.playerName.config(text = self.game.playerHand().player.name)
+
+        for frame in self.playerFrames:
+            frame.config(background = "sea green" if frame.player == self.game.playerHand().player else "SkyBlue3")
+            frame.playerName.config(text = frame.player.name)
+            frame.playerMoney.config(text = f"${frame.player.money}")
+            frame.config()
+
         self.currentPlayer.config(text = self.game.playerHand().player.name)
-        self.playerMoney.config(text = f"${self.game.playerHand().player.money}")
-        self.playerBet.config(text = f"${self.game.playerHand().betAmount}")
+        self.handBet.config(text = f"${self.game.playerHand().betAmount}")
 
         if self.stage == Stage.PLACING_BETS:
-            self.banner["text"] = "Place bets"
-            self.btnHit["text"] = "Increase"
-            self.btnContinue["text"] = "Deal"
+            self.banner.config(text = "Place bets")
+            self.btnHit.config(text = "Increase")
+            self.btnContinue.config(text = "Deal")
             self.dealerValue.config(text = "")
-            self.playerValue.config(text = "")
+            self.handValue.config(text = "")
             self.btnHit.pack(side = BOTTOM, fill = X, padx = 5, pady = 2)
             self.btnDouble.pack_forget()
             self.btnSplit.pack_forget()
 
         if self.stage == Stage.PLAYING:
-            self.playerValue.config(text = self.game.playerHand().getValue())
+            self.handValue.config(text = self.game.playerHand().getValue())
             self.btnHit.pack(side = BOTTOM, fill = X, padx = 5, pady = 2)
             self.btnDouble.pack(side = BOTTOM, fill = X, padx = 5, pady = 2)
             if self.game.playerHand().isSplittable():
@@ -118,7 +130,7 @@ class BlackJackWindow(Tk):
             self.btnContinue["text"] = "Stand"
     
         if self.stage == Stage.VIEWING:
-            self.playerValue.config(text = self.game.playerHand().getValue())
+            self.handValue.config(text = self.game.playerHand().getValue())
             self.dealerValue.config(text = self.game.dealerHand.getValue() if self.game.dealerHand.public() else "")
             self.btnSplit.pack_forget()
             self.btnDouble.pack_forget()
@@ -158,7 +170,8 @@ class BlackJackWindow(Tk):
         self.advance()
 
     def split(self, event = None):
-        self.game.split(self.game.playerHand())
+        playerHand = self.game.playerHand()
+        self.game.split(playerHand)
         self.updateBoard()
 
     # go to next stage
